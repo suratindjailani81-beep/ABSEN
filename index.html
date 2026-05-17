@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#1a3a5c"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="AbsenSiswa"/>
+  <meta name="description" content="Sistem Absensi Siswa Online berbasis GPS"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <title>AbsenSiswa — Sistem Absensi Online</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* ===== RESET & VARIABLES ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:    #0f2744;
+      --blue:    #1a4a8a;
+      --sky:     #2e7dd1;
+      --accent:  #f0a500;
+      --green:   #27ae60;
+      --red:     #e74c3c;
+      --white:   #f5f8ff;
+      --gray:    #8899aa;
+      --card:    #162e52;
+      --border:  rgba(255,255,255,0.1);
+      --shadow:  0 8px 32px rgba(0,0,0,0.4);
+      --radius:  16px;
+      --font-display: 'Space Mono', monospace;
+      --font-body:    'Nunito', sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--navy);
+      color: var(--white);
+      overflow-x: hidden;
+    }
+
+    /* ===== BACKGROUND PATTERN ===== */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% -10%, rgba(46,125,209,0.25) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 85% 110%, rgba(240,165,0,0.12) 0%, transparent 55%);
+      pointer-events: none;
+    }
+
+    /* ===== LAYOUT ===== */
+    #app {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      padding: 20px 24px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15,39,68,0.7);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--sky), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 15px; font-weight: 700;
+      color: var(--white); line-height: 1.1;
+    }
+    .logo-text span { color: var(--accent); }
+    #headerUser {
+      font-size: 13px; color: var(--gray);
+      text-align: right;
+    }
+    #headerUser strong { color: var(--white); display: block; font-size: 14px; }
+
+    /* ===== MAIN CONTENT ===== */
+    main {
+      flex: 1; padding: 24px 20px;
+      max-width: 480px; margin: 0 auto; width: 100%;
+    }
+
+    /* ===== TOAST ===== */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--card); border: 1px solid var(--border);
+      padding: 14px 22px; border-radius: 50px;
+      font-size: 14px; font-weight: 700; color: var(--white);
+      box-shadow: var(--shadow); z-index: 999;
+      transition: transform 0.35s cubic-bezier(.34,1.56,.64,1), opacity 0.3s;
+      opacity: 0; min-width: 240px; text-align: center;
+      display: flex; align-items: center; gap: 10px; justify-content: center;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: #7dffb3; }
+    #toast.error   { border-color: var(--red);   color: #ffaaaa; }
+
+    /* ===== LOADER ===== */
+    #loader {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(10,24,48,0.75); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    #loader.show { display: flex; }
+    .spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 4px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loader p { font-size: 14px; color: var(--gray); font-weight: 700; }
+
+    /* ===== SCREENS ===== */
+    .screen { display: none; animation: fadeUp 0.4s ease; }
+    .screen.active { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== CARD ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h2 {
+      font-family: var(--font-display);
+      font-size: 20px; margin-bottom: 6px;
+      color: var(--white);
+    }
+    h2 .hi { color: var(--accent); }
+    .subtitle {
+      font-size: 13px; color: var(--gray);
+      margin-bottom: 24px; line-height: 1.5;
+    }
+
+    /* ===== TABS ===== */
+    .tabs {
+      display: flex; gap: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px; padding: 4px;
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px;
+      border: none; border-radius: 10px;
+      font-family: var(--font-body); font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: all 0.25s;
+      background: transparent; color: var(--gray);
+    }
+    .tab-btn.active {
+      background: var(--sky); color: var(--white);
+      box-shadow: 0 4px 12px rgba(46,125,209,0.4);
+    }
+
+    /* ===== FORM ===== */
+    .form-group { margin-bottom: 16px; }
+    label {
+      display: block; font-size: 12px; font-weight: 800;
+      color: var(--gray); text-transform: uppercase;
+      letter-spacing: 0.08em; margin-bottom: 8px;
+    }
+    input {
+      width: 100%; padding: 14px 16px;
+      background: rgba(0,0,0,0.3);
+      border: 1.5px solid var(--border);
+      border-radius: 12px; color: var(--white);
+      font-family: var(--font-body); font-size: 15px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    input:focus {
+      border-color: var(--sky);
+      box-shadow: 0 0 0 3px rgba(46,125,209,0.2);
+    }
+    input::placeholder { color: rgba(255,255,255,0.25); }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      width: 100%; padding: 15px;
+      border: none; border-radius: 14px;
+      font-family: var(--font-body); font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: all 0.25s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      letter-spacing: 0.02em;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--sky), #1a6abf);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(46,125,209,0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(46,125,209,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-accent {
+      background: linear-gradient(135deg, var(--accent), #d4900a);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(240,165,0,0.35);
+    }
+    .btn-accent:hover { transform: translateY(-2px); }
+
+    .btn-green {
+      background: linear-gradient(135deg, var(--green), #1e8449);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(39,174,96,0.35);
+    }
+    .btn-red {
+      background: linear-gradient(135deg, var(--red), #c0392b);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(231,76,60,0.35);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--border);
+      color: var(--gray);
+    }
+    .btn-outline:hover { border-color: var(--sky); color: var(--white); }
+    .btn + .btn { margin-top: 12px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    /* ===== WELCOME SCREEN ===== */
+    .welcome-hero {
+      text-align: center; padding: 20px 0 32px;
+    }
+    .welcome-icon {
+      width: 80px; height: 80px; border-radius: 24px;
+      background: linear-gradient(135deg, var(--sky), var(--accent));
+      margin: 0 auto 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px;
+      box-shadow: 0 12px 40px rgba(46,125,209,0.4);
+    }
+    .welcome-hero h1 {
+      font-family: var(--font-display);
+      font-size: 26px; margin-bottom: 8px;
+    }
+    .welcome-hero h1 span { color: var(--accent); }
+    .welcome-hero p {
+      font-size: 14px; color: var(--gray); line-height: 1.6;
+    }
+
+    /* ===== DASHBOARD ===== */
+    .user-info-card {
+      background: linear-gradient(135deg, var(--blue), var(--sky));
+      border: none; padding: 20px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .avatar {
+      width: 52px; height: 52px; border-radius: 16px;
+      background: rgba(255,255,255,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .user-name { font-size: 18px; font-weight: 800; margin-bottom: 2px; }
+    .user-nis  { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+    .time-card {
+      text-align: center;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 16px;
+      margin-bottom: 20px;
+    }
+    #liveClock {
+      font-family: var(--font-display);
+      font-size: 38px; font-weight: 700;
+      color: var(--accent); letter-spacing: 2px;
+    }
+    #liveDate { font-size: 13px; color: var(--gray); margin-top: 4px; }
+
+    .absen-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 20px;
+    }
+    .absen-btn-card {
+      border-radius: 14px; padding: 20px 16px;
+      border: 2px solid transparent;
+      cursor: pointer; transition: all 0.25s;
+      text-align: center; font-family: var(--font-body);
+    }
+    .absen-btn-card:hover { transform: translateY(-3px); }
+    .absen-btn-card .absen-icon { font-size: 32px; margin-bottom: 8px; }
+    .absen-btn-card .absen-label {
+      font-size: 13px; font-weight: 800; display: block;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .absen-btn-card .absen-time { font-size: 11px; margin-top: 4px; color: rgba(255,255,255,0.7); }
+
+    .card-datang {
+      background: linear-gradient(135deg, rgba(39,174,96,0.25), rgba(39,174,96,0.1));
+      border-color: rgba(39,174,96,0.4);
+    }
+    .card-pulang {
+      background: linear-gradient(135deg, rgba(231,76,60,0.25), rgba(231,76,60,0.1));
+      border-color: rgba(231,76,60,0.4);
+    }
+
+    .status-today {
+      border-radius: 12px; padding: 14px 16px;
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border);
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .status-dot.hadir  { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-dot.absent { background: var(--gray); }
+    .status-dot.late   { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .status-text { font-size: 13px; color: var(--gray); }
+    .status-text strong { color: var(--white); display: block; font-size: 14px; }
+
+    /* ===== RIWAYAT ===== */
+    .riwayat-item {
+      padding: 14px; border-radius: 12px;
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+    .riwayat-header {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 8px;
+    }
+    .riwayat-tanggal { font-size: 13px; font-weight: 800; color: var(--sky); }
+    .badge {
+      font-size: 11px; padding: 3px 10px; border-radius: 20px;
+      font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-green  { background: rgba(39,174,96,0.2);  color: #7dffb3; border: 1px solid rgba(39,174,96,0.4); }
+    .badge-red    { background: rgba(231,76,60,0.2);  color: #ffaaaa; border: 1px solid rgba(231,76,60,0.4); }
+    .badge-orange { background: rgba(240,165,0,0.2);  color: #ffe080; border: 1px solid rgba(240,165,0,0.4); }
+    .badge-gray   { background: rgba(136,153,170,0.2); color: #aabbcc; border: 1px solid rgba(136,153,170,0.4); }
+    .riwayat-times {
+      display: flex; gap: 16px; font-size: 12px; color: var(--gray);
+    }
+    .riwayat-times span { display: flex; align-items: center; gap: 4px; }
+
+    /* ===== LOCATION STATUS ===== */
+    .loc-status {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-radius: 12px;
+      background: rgba(0,0,0,0.2); border: 1px solid var(--border);
+      margin-bottom: 16px; font-size: 13px;
+    }
+    .loc-status .loc-icon { font-size: 18px; }
+    .loc-status .loc-text { color: var(--gray); }
+    .loc-status.ok   { border-color: rgba(39,174,96,0.4);  }
+    .loc-status.ok .loc-text   { color: #7dffb3; }
+    .loc-status.bad  { border-color: rgba(231,76,60,0.4);  }
+    .loc-status.bad .loc-text  { color: #ffaaaa; }
+    .loc-status.wait { border-color: rgba(240,165,0,0.4);  }
+    .loc-status.wait .loc-text { color: #ffe080; }
+
+    /* ===== INSTALL BANNER ===== */
+    #installBanner {
+      display: none; position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--card); border-top: 1px solid var(--border);
+      padding: 16px 20px; z-index: 150;
+      flex-direction: column; gap: 12px;
+      box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+    }
+    #installBanner.show { display: flex; }
+    .install-info { display: flex; align-items: center; gap: 12px; }
+    .install-info p { font-size: 13px; line-height: 1.4; }
+    .install-info p strong { color: var(--accent); }
+    .install-actions { display: flex; gap: 10px; }
+    .install-actions .btn { flex: 1; padding: 12px; }
+
+    /* ===== LOGOUT BTN ===== */
+    .logout-row {
+      display: flex; justify-content: center; margin-top: 8px;
+    }
+    .btn-logout {
+      background: transparent; border: none;
+      color: var(--gray); font-size: 13px; font-weight: 700;
+      cursor: pointer; padding: 10px 20px;
+      border-radius: 10px; transition: color 0.2s;
+      font-family: var(--font-body);
+    }
+    .btn-logout:hover { color: var(--red); }
+
+    /* ===== DIVIDER ===== */
+    .divider {
+      text-align: center; position: relative; margin: 20px 0;
+      color: var(--gray); font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: ''; position: absolute; top: 50%;
+      width: 40%; height: 1px; background: var(--border);
+    }
+    .divider::before { left: 0; }
+    .divider::after  { right: 0; }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+      text-align: center; padding: 40px 20px;
+      color: var(--gray); font-size: 14px;
+    }
+    .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 360px) {
+      main { padding: 16px 14px; }
+      #liveClock { font-size: 30px; }
+      .absen-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📋</div>
+      <div class="logo-text">Absen<span>Siswa</span></div>
+    </div>
+    <div id="headerUser" style="display:none"></div>
+  </header>
+
+  <main>
+
+    <!-- ==================== SCREEN: WELCOME ==================== -->
+    <div id="screenWelcome" class="screen active">
+      <div class="welcome-hero">
+        <div class="welcome-icon">🏫</div>
+        <h1>Absen<span>Siswa</span></h1>
+        <p>Sistem absensi online berbasis GPS.<br/>Cepat, mudah, dan akurat.</p>
+      </div>
+
+      <div class="card">
+        <!-- TABS -->
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('login')">Masuk</button>
+          <button class="tab-btn" onclick="switchTab('register')">Daftar</button>
+        </div>
+
+        <!-- FORM LOGIN -->
+        <div id="formLogin">
+          <div class="form-group">
+            <label>NIS (Nomor Induk Siswa)</label>
+            <input type="text" id="loginNis" placeholder="Masukkan NIS kamu" inputmode="numeric"/>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPass" placeholder="••••••••"/>
+          </div>
+          <button class="btn btn-primary" onclick="doLogin()">
+            🔑 Masuk Sekarang
+          </button>
+        </div>
+
+        <!-- FORM REGISTER -->
+        <div id="formRegister" style="display:none">
+          <div class="form-group">
+            <label>Nama Lengkap</label>
+            <input type="text" id="regNama" placeholder="Nama sesuai data sekolah"/>
+          </div>
+          <div class="form-group">
+            <label>NIS (Nomor Induk Siswa)</label>
+            <input type="text" id="regNis" placeholder="Masukkan NIS kamu" inputmode="numeric"/>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPass" placeholder="Buat password"/>
+          </div>
+          <button class="btn btn-accent" onclick="doRegister()">
+            ✅ Daftar Sekarang
+          </button>
+          <p style="font-size:12px;color:var(--gray);margin-top:12px;text-align:center;">
+            Pastikan NIS benar karena tidak bisa diubah.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SCREEN: DASHBOARD ==================== -->
+    <div id="screenDashboard" class="screen">
+
+      <!-- User Info -->
+      <div class="card user-info-card">
+        <div class="avatar">👤</div>
+        <div>
+          <div class="user-name" id="dashNama">—</div>
+          <div class="user-nis" id="dashNis">NIS: —</div>
+        </div>
+      </div>
+
+      <!-- Jam Digital -->
+      <div class="time-card">
+        <div id="liveClock">00:00:00</div>
+        <div id="liveDate">—</div>
+      </div>
+
+      <!-- Status Lokasi -->
+      <div class="loc-status wait" id="locStatus">
+        <span class="loc-icon">📍</span>
+        <span class="loc-text">Mengambil lokasi GPS...</span>
+      </div>
+
+      <!-- Status Absen Hari Ini -->
+      <div class="status-today" id="statusToday">
+        <div class="status-dot absent" id="statusDot"></div>
+        <div class="status-text">
+          <strong id="statusLabel">Belum Absen</strong>
+          <span id="statusSub">Silakan absen datang sekarang</span>
+        </div>
+      </div>
+
+      <!-- Tombol Absen -->
+      <div class="absen-grid">
+        <div class="absen-btn-card card-datang" onclick="doAbsenDatang()">
+          <div class="absen-icon">🟢</div>
+          <span class="absen-label">Absen Datang</span>
+          <div class="absen-time">06.00 – 07.30 WIB</div>
+        </div>
+        <div class="absen-btn-card card-pulang" onclick="doAbsenPulang()">
+          <div class="absen-icon">🔴</div>
+          <span class="absen-label">Absen Pulang</span>
+          <div class="absen-time">Mulai 15.00 WIB</div>
+        </div>
+      </div>
+
+      <!-- Riwayat Absen -->
+      <div class="card">
+        <h2>📅 Riwayat Absen</h2>
+        <p class="subtitle">10 hari terakhir kehadiran kamu</p>
+        <div id="riwayatList">
+          <div class="empty-state">
+            <div class="empty-icon">🗂️</div>
+            <p>Memuat data riwayat...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="logout-row">
+        <button class="btn-logout" onclick="doLogout()">⬅ Keluar Akun</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="spinner"></div>
+  <p id="loaderText">Memproses...</p>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- INSTALL BANNER -->
+<div id="installBanner">
+  <div class="install-info">
+    <span style="font-size:32px">📲</span>
+    <p>Pasang <strong>AbsenSiswa</strong> di layar utama HP kamu untuk akses lebih cepat!</p>
+  </div>
+  <div class="install-actions">
+    <button class="btn btn-primary" id="btnInstall" onclick="installPWA()">Pasang</button>
+    <button class="btn btn-outline" onclick="dismissInstall()">Nanti</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//   KONFIGURASI — GANTI URL INI DENGAN URL APPS SCRIPT KAMU
+// ============================================================
+var SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhbV4Wl0Z-mp9iHM40ha0VQ5JA-aKZZpN4pRD2kK6JFoF_HZ3-MCHNjFXrcc4eOhW_0g/exec ";
+// Contoh: "https://script.google.com/macros/s/ABCDEF.../exec"
+
+// ============================================================
+//   STATE
+// ============================================================
+var currentUser = null;
+var userLat     = null;
+var userLng     = null;
+var deferredPrompt = null;
+
+// ============================================================
+//   INIT
+// ============================================================
+window.addEventListener('load', function() {
+  // Cek login tersimpan
+  var saved = localStorage.getItem('absen_user');
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      showDashboard();
+    } catch(e) { localStorage.removeItem('absen_user'); }
+  }
+
+  // Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+
+  // Install prompt
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (!localStorage.getItem('install_dismissed')) {
+      document.getElementById('installBanner').classList.add('show');
+    }
+  });
+
+  // Clock
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Lokasi
+  getLocation();
+});
+
+// ============================================================
+//   CLOCK
+// ============================================================
+function updateClock() {
+  var now  = new Date();
+  var h    = pad(now.getHours());
+  var m    = pad(now.getMinutes());
+  var s    = pad(now.getSeconds());
+  var days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  var months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  document.getElementById('liveClock').textContent = h+':'+m+':'+s+' WIB';
+  document.getElementById('liveDate').textContent =
+    days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+}
+function pad(n) { return n < 10 ? '0'+n : ''+n; }
+
+// ============================================================
+//   LOKASI GPS
+// ============================================================
+function getLocation() {
+  if (!navigator.geolocation) {
+    setLocStatus('bad', '📍 GPS tidak didukung di browser ini');
+    return;
+  }
+  setLocStatus('wait', '📍 Mengambil lokasi GPS...');
+  navigator.geolocation.watchPosition(
+    function(pos) {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      var jarak = hitungJarak(userLat, userLng, 0.5084878150913366, 121.4663606701032);
+      if (jarak <= 100) {
+        setLocStatus('ok', '✅ Dalam area sekolah (' + Math.round(jarak) + ' m)');
+      } else {
+        setLocStatus('bad', '⚠️ Di luar area sekolah (' + Math.round(jarak) + ' m)');
+      }
+    },
+    function(err) {
+      setLocStatus('bad', '❌ Gagal ambil GPS. Aktifkan lokasi di HP.');
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+function setLocStatus(type, text) {
+  var el = document.getElementById('locStatus');
+  if (!el) return;
+  el.className = 'loc-status ' + type;
+  el.innerHTML = '<span class="loc-icon">📍</span><span class="loc-text">' + text + '</span>';
+}
+
+function hitungJarak(lat1, lon1, lat2, lon2) {
+  var R = 6371000;
+  var dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function toRad(d) { return d * Math.PI / 180; }
+
+// ============================================================
+//   TAB SWITCH
+// ============================================================
+function switchTab(tab) {
+  document.getElementById('formLogin').style.display    = tab==='login'    ? '' : 'none';
+  document.getElementById('formRegister').style.display = tab==='register' ? '' : 'none';
+  document.querySelectorAll('.tab-btn').forEach(function(b,i) {
+    b.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='register'));
+  });
+}
+
+// ============================================================
+//   REGISTER
+// ============================================================
+function doRegister() {
+  var nama = document.getElementById('regNama').value.trim();
+  var nis  = document.getElementById('regNis').value.trim();
+  var pass = document.getElementById('regPass').value;
+  if (!nama || !nis || !pass) { showToast('Semua kolom wajib diisi!', 'error'); return; }
+  if (pass.length < 4) { showToast('Password minimal 4 karakter', 'error'); return; }
+
+  showLoader('Mendaftarkan akun...');
+  postData({ aksi:'register', nis:nis, nama:nama, password:pass })
+    .then(function(res) {
+      hideLoader();
+      if (res.status === 'success') {
+        showToast('🎉 ' + res.message, 'success');
+        setTimeout(function() { switchTab('login'); }, 1500);
+        document.getElementById('loginNis').value = nis;
+      } else {
+        showToast('❌ ' + res.message, 'error');
+      }
+    }).catch(function() {
+      hideLoader();
+      showToast('❌ Gagal terhubung ke server', 'error');
+    });
+}
+
+// ============================================================
+//   LOGIN
+// ============================================================
+function doLogin() {
+  var nis  = document.getElementById('loginNis').value.trim();
+  var pass = document.getElementById('loginPass').value;
+  if (!nis || !pass) { showToast('NIS dan password wajib diisi!', 'error'); return; }
+
+  showLoader('Memeriksa akun...');
+  postData({ aksi:'login', nis:nis, password:pass })
+    .then(function(res) {
+      hideLoader();
+      if (res.status === 'success') {
+        currentUser = res.data;
+        localStorage.setItem('absen_user', JSON.stringify(currentUser));
+        showToast('👋 Selamat datang, ' + currentUser.nama + '!', 'success');
+        setTimeout(showDashboard, 800);
+      } else {
+        showToast('❌ ' + res.message, 'error');
+      }
+    }).catch(function() {
+      hideLoader();
+      showToast('❌ Gagal terhubung ke server. Periksa koneksi internet.', 'error');
+    });
+}
+
+// ============================================================
+//   DASHBOARD
+// ============================================================
+function showDashboard() {
+  showScreen('screenDashboard');
+  document.getElementById('dashNama').textContent = currentUser.nama;
+  document.getElementById('dashNis').textContent  = 'NIS: ' + currentUser.nis;
+  document.getElementById('headerUser').style.display = '';
+  document.getElementById('headerUser').innerHTML =
+    '<strong>' + currentUser.nama + '</strong>' + currentUser.nis;
+  loadRiwayat();
+  getLocation();
+}
+
+// ============================================================
+//   ABSEN DATANG
+// ============================================================
+function doAbsenDatang() {
+  if (!cekLokasi()) return;
+  showLoader('Mencatat absen datang...');
+  postData({ aksi:'absenDatang', nis:currentUser.nis, latitude:userLat, longitude:userLng })
+    .then(function(res) {
+      hideLoader();
+      if (res.status === 'success') {
+        showToast('✅ ' + res.message, 'success');
+        updateStatusToday(res.data.keterangan, res.data.waktu, '');
+        loadRiwayat();
+      } else {
+        showToast('❌ ' + res.message, 'error');
+      }
+    }).catch(function() {
+      hideLoader();
+      showToast('❌ Gagal terhubung ke server', 'error');
+    });
+}
+
+// ============================================================
+//   ABSEN PULANG
+// ============================================================
+function doAbsenPulang() {
+  if (!cekLokasi()) return;
+  showLoader('Mencatat absen pulang...');
+  postData({ aksi:'absenPulang', nis:currentUser.nis, latitude:userLat, longitude:userLng })
+    .then(function(res) {
+      hideLoader();
+      if (res.status === 'success') {
+        showToast('✅ ' + res.message, 'success');
+        loadRiwayat();
+      } else {
+        showToast('❌ ' + res.message, 'error');
+      }
+    }).catch(function() {
+      hideLoader();
+      showToast('❌ Gagal terhubung ke server', 'error');
+    });
+}
+
+function cekLokasi() {
+  if (userLat === null || userLng === null) {
+    showToast('⚠️ GPS belum siap. Tunggu sebentar.', 'error');
+    return false;
+  }
+  var jarak = hitungJarak(userLat, userLng, 0.5084878150913366, 121.4663606701032);
+  if (jarak > 100) {
+    showToast('❌ Kamu berada di luar area sekolah (' + Math.round(jarak) + ' m)', 'error');
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+//   RIWAYAT
+// ============================================================
+function loadRiwayat() {
+  var el = document.getElementById('riwayatList');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Memuat riwayat...</p></div>';
+
+  getData('riwayat', currentUser.nis)
+    .then(function(res) {
+      if (res.status !== 'success' || !res.data.length) {
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">🗂️</div><p>Belum ada data absen.</p></div>';
+        return;
+      }
+      // Tampilkan 10 terbaru
+      var list = res.data.slice(-10).reverse();
+      el.innerHTML = '';
+
+      // Update status hari ini
+      var today = list[0];
+      if (today) {
+        updateStatusToday(today.keterangan, today.waktuDatang, today.waktuPulang);
+      }
+
+      list.forEach(function(item) {
+        var badgeClass = 'badge-gray', badgeText = item.keterangan || 'Tidak Hadir';
+        if (item.keterangan === 'Datang Tepat Waktu')  { badgeClass = 'badge-green';  }
+        else if (item.keterangan === 'Datang Terlambat') { badgeClass = 'badge-orange'; }
+        else if (item.keterangan === 'Cepat Pulang/Bolos'){ badgeClass = 'badge-red'; }
+        else { badgeClass = 'badge-gray'; }
+
+        el.innerHTML += '<div class="riwayat-item">' +
+          '<div class="riwayat-header">' +
+          '  <span class="riwayat-tanggal">' + item.tanggal + '</span>' +
+          '  <span class="badge ' + badgeClass + '">' + badgeText + '</span>' +
+          '</div>' +
+          '<div class="riwayat-times">' +
+          '  <span>🟢 ' + (item.waktuDatang || '—') + '</span>' +
+          '  <span>🔴 ' + (item.waktuPulang || '—') + '</span>' +
+          '</div>' +
+          '</div>';
+      });
+    })
+    .catch(function() {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Gagal memuat riwayat.</p></div>';
+    });
+}
+
+function updateStatusToday(keterangan, datang, pulang) {
+  var dot   = document.getElementById('statusDot');
+  var label = document.getElementById('statusLabel');
+  var sub   = document.getElementById('statusSub');
+  if (!dot || !label || !sub) return;
+
+  dot.className = 'status-dot absent';
+  if (!keterangan || keterangan === 'Tidak Hadir') {
+    label.textContent = 'Belum/Tidak Hadir';
+    sub.textContent   = 'Kamu belum absen hari ini';
+  } else if (keterangan === 'Datang Tepat Waktu') {
+    dot.className = 'status-dot hadir';
+    label.textContent = '✅ Tepat Waktu';
+    sub.textContent   = 'Datang: ' + datang + (pulang ? ' | Pulang: ' + pulang : '');
+  } else if (keterangan === 'Datang Terlambat') {
+    dot.className = 'status-dot late';
+    label.textContent = '⚠️ Terlambat';
+    sub.textContent   = 'Datang: ' + datang;
+  } else {
+    label.textContent = keterangan;
+    sub.textContent   = datang ? 'Datang: ' + datang : '';
+  }
+}
+
+// ============================================================
+//   LOGOUT
+// ============================================================
+function doLogout() {
+  localStorage.removeItem('absen_user');
+  currentUser = null;
+  document.getElementById('headerUser').style.display = 'none';
+  document.getElementById('loginNis').value  = '';
+  document.getElementById('loginPass').value = '';
+  showScreen('screenWelcome');
+  showToast('👋 Berhasil keluar', 'success');
+}
+
+// ============================================================
+//   HTTP HELPERS
+// ============================================================
+function postData(payload) {
+  return fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); });
+}
+
+function getData(aksi, nis) {
+  return fetch(SCRIPT_URL + '?aksi=' + aksi + '&nis=' + nis)
+    .then(function(r) { return r.json(); });
+}
+
+// ============================================================
+//   UI HELPERS
+// ============================================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s) {
+    s.classList.remove('active');
+  });
+  document.getElementById(id).classList.add('active');
+}
+
+function showLoader(text) {
+  document.getElementById('loaderText').textContent = text || 'Memproses...';
+  document.getElementById('loader').classList.add('show');
+}
+function hideLoader() {
+  document.getElementById('loader').classList.remove('show');
+}
+
+var toastTimer = null;
+function showToast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { el.className = ''; }, 3500);
+}
+
+// ============================================================
+//   PWA INSTALL
+// ============================================================
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function() {
+    deferredPrompt = null;
+    document.getElementById('installBanner').classList.remove('show');
+  });
+}
+function dismissInstall() {
+  localStorage.setItem('install_dismissed', '1');
+  document.getElementById('installBanner').classList.remove('show');
+}
+</script>
+</body>
+</html>
